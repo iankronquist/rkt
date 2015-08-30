@@ -89,22 +89,26 @@ func (p *authV1JsonParser) parse(config *Config, raw []byte) error {
 		return fmt.Errorf("no domains specified")
 	}
 	if len(auth.Type) == 0 {
-		return fmt.Errorf("no auth type specified")
-	}
-	var (
-		err      error
-		headerer Headerer
-	)
-	switch auth.Type {
-	case "basic":
-		headerer, err = p.getBasicV1Headerer(auth.Credentials)
-	case "oauth":
-		headerer, err = p.getOAuthV1Headerer(auth.Credentials)
-	default:
-		err = fmt.Errorf("unknown auth type: %q", auth.Type)
-	}
-	if err != nil {
-		return err
+		headerer, err = p.getEnvV1Headerer()
+		if err != nil {
+			return fmt.Errorf("no auth type specified and no RKT environment variables set")
+		}
+	} else {
+		var (
+			err      error
+			headerer Headerer
+		)
+		switch auth.Type {
+		case "basic":
+			headerer, err = p.getBasicV1Headerer(auth.Credentials)
+		case "oauth":
+			headerer, err = p.getOAuthV1Headerer(auth.Credentials)
+		default:
+			err = fmt.Errorf("unknown auth type: %q", auth.Type)
+		}
+		if err != nil {
+			return err
+		}
 	}
 	for _, domain := range auth.Domains {
 		if _, ok := config.AuthPerHost[domain]; ok {
@@ -113,6 +117,26 @@ func (p *authV1JsonParser) parse(config *Config, raw []byte) error {
 		config.AuthPerHost[domain] = headerer
 	}
 	return nil
+}
+
+func (p *authV1JsonParser) getEnvV1Headerer() (Headerer, error) {
+	oauth_token := os.GetEnv("RKT_OAUTH_TOKEN")
+	if oauth_token == "" {
+		http_pass := os.GetEnv("RKT_HTTP_PASS")
+		http_user := os.GetEnv("RKT_HTTP_USER")
+		if http_pass == "" && http_user == "" {
+			return &basicAuthHeaderer{
+				user:     http_user,
+				password: http_pass,
+			}, nil
+		} else {
+			return fmt.Errorf("no RKT environment variables set")
+		}
+	} else {
+		return &oAuthBearerTokenHeaderer{
+			token: oauth_token,
+		}, nil
+	}
 }
 
 func (p *authV1JsonParser) getBasicV1Headerer(raw json.RawMessage) (Headerer, error) {
