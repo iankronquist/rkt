@@ -4,7 +4,7 @@ LKVM_SRCDIR := $(LKVM_TMP)/src
 LKVM_BINARY := $(LKVM_SRCDIR)/lkvm-static
 LKVM_ACI_BINARY := $(ACIROOTFSDIR)/lkvm
 LKVM_GIT := https://kernel.googlesource.com/pub/scm/linux/kernel/git/will/kvmtool
-# just last published version (for reproducible builds), not for any other reason 
+# just last published version (for reproducible builds), not for any other reason
 LKVM_VERSION := 4095fac878f618ae5e7384a1dc65ee34b6e05217
 
 LKVM_STUFFDIR := $(MK_SRCDIR)/lkvm
@@ -21,49 +21,35 @@ CREATE_DIRS += $(LKVM_TMP)
 $(LKVM_STAMP): $(LKVM_ACI_BINARY)
 	touch "$@"
 
-$(LKVM_BINARY): LKVM_SRCDIR := $(LKVM_SRCDIR)
+$(call forward-vars,$(LKVM_BINARY), \
+	MAKE LKVM_SRCDIR)
 $(LKVM_BINARY): $(LKVM_PATCH_STAMP)
 	$(MAKE) -C "$(LKVM_SRCDIR)" lkvm-static
 
 -include $(LKVM_PATCHES_DEPMK)
-$(LKVM_PATCH_STAMP): GO_ENV := $(GO_ENV)
-$(LKVM_PATCH_STAMP): DEPSGENTOOL := $(DEPSGENTOOL)
-$(LKVM_PATCH_STAMP): LKVM_PATCHES := $(LKVM_PATCHES)
-$(LKVM_PATCH_STAMP): LKVM_PATCHES_DEPMK := $(LKVM_PATCHES_DEPMK)
-$(LKVM_PATCH_STAMP): LKVM_SRCDIR := $(LKVM_SRCDIR)
+$(call forward-vars,$(LKVM_PATCH_STAMP), \
+	DEPSGENTOOL LKVM_PATCHES LKVM_PATCHES_DEPMK LKVM_SRCDIR)
 $(LKVM_PATCH_STAMP): $(LKVM_SRCDIR)/Makefile $(DEPSGENTOOL_STAMP)
 	set -e; \
 	shopt -s nullglob; \
-	$(GO_ENV) "$(DEPSGENTOOL)" glob --target '$$(LKVM_SRCDIR)/Makefile' --suffix=.patch $(LKVM_PATCHES) >"$(LKVM_PATCHES_DEPMK)"; \
+	"$(DEPSGENTOOL)" glob --target '$$(LKVM_SRCDIR)/Makefile' --suffix=.patch $(LKVM_PATCHES) >"$(LKVM_PATCHES_DEPMK)"; \
 	for p in $(LKVM_PATCHES); do \
 		patch --directory="$(LKVM_SRCDIR)" --strip=1 --forward <"$${p}"; \
 	done; \
 	touch "$@"
 
-# add remote only if not added 
+# add remote only if not added
 # don't fetch existing (commit cannot change)
-$(LKVM_SRCDIR)/Makefile: LKVM_GIT := $(LKVM_GIT)
-$(LKVM_SRCDIR)/Makefile: LKVM_SRCDIR := $(LKVM_SRCDIR)
-$(LKVM_SRCDIR)/Makefile: LKVM_VERSION := $(LKVM_VERSION)
+$(call forward-vars,$(LKVM_SRCDIR)/Makefile, \
+	LKVM_SRCDIR LKVM_GIT LKVM_VERSION)
 $(LKVM_SRCDIR)/Makefile: | $(LKVM_TMP)
 	set -e; \
 	mkdir -p $(LKVM_SRCDIR); cd $(LKVM_SRCDIR); \
- 	git init; \
+	git init; \
 	git remote | grep --silent origin || git remote add origin "$(LKVM_GIT)"; \
 	git rev-parse --quiet --verify HEAD >/dev/null || git fetch --depth=1 origin $(LKVM_VERSION) && git checkout --quiet $(LKVM_VERSION); \
 	git reset --hard; \
 	git clean -ffdx; \
 	touch "$@"
 
-LKVM_STAMP :=
-LKVM_TMP :=
-LKVM_SRCDIR :=
-LKVM_BINARY :=
-LKVM_ACI_BINARY :=
-LKVM_GIT :=
-LKVM_VERSION := 
-LKVM_STUFFDIR := 
-LKVM_PATCHES := 
-LKVM_PATCH_STAMP :=
-LKVM_PATCHES_DEPMK :=
-
+$(call undefine-namespaces,LKVM)
